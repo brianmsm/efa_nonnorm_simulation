@@ -1,0 +1,38 @@
+---
+title: "Simulación de ítems con distribuciones no-normales y su efecto en el análisis factorial exploratorio mediante correlaciones teracóricas/policóricas"
+authors:
+  - name: Brian Norman Peña-Calero
+    affiliation: The University
+    roles: analyst
+    corresponding: true
+date: now
+date-format: "DD MMMM, YYYY"
+format: 
+  html:
+    theme:
+      light: flatly
+      dark: darkly
+    toc: true
+    toc-depth: 5
+    number-sections: true
+    anchor-sections: true
+    code-line-numbers: true
+    code-overflow: scroll
+    code-copy: hover
+    code-link: true
+    code-fold: true
+    code-tools: true
+    fig-dpi: 300
+lang: es
+lightbox: true
+embed-resources: true
+editor_options: 
+  chunk_output_type: console
+---
+
+## Section
+This is a simple placeholder for the manuscript's main document.
+
+```{r}
+1 + 1
+```
