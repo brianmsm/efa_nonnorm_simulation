@@ -1,0 +1,285 @@
+---
+title: "Entendimiento de la idea de investigación"
+authors:
+  - name: Brian Norman Peña-Calero
+    orcid: 0000-0002-1073-9306
+    affiliation: Universidad Complutense de Madrid (UCM)
+    email: 
+    roles: 
+      - Researcher
+      - Analyst
+    corresponding: true
+date: last-modified
+date-format: "DD MMMM, YYYY"
+lang: es
+lightbox: true
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(plotly)
+```
+
+# Normalidad bivariada
+
+
+```{r}
+sigma <- matrix(c(1, 0.7, 0.7, 1), 
+                nrow = 2)
+
+mvn_sim <- MASS::mvrnorm(n = 10000, c(0, 0), 
+                         sigma) |> 
+  as.data.frame()
+
+dens <- MASS::kde2d(mvn_sim$V1, mvn_sim$V2, n = 100,
+              lims = c(-3, 3, -3, 3))  
+
+ggplot(expand.grid(x = dens$x, y = dens$y), 
+       aes(x = x, y = y, z = as.vector(dens$z))) +
+  geom_contour() +
+  scale_y_continuous(limits = c(-3, 3)) +
+  scale_x_continuous(limits = c(-3, 3)) +
+  theme_minimal()
+```
+
+```{r}
+thresholds <- c(-1.5, -0.5, 0.5, 1.5)
+ggplot(expand.grid(x = dens$x, y = dens$y), 
+       aes(x = x, y = y, z = as.vector(dens$z))) +
+  geom_contour(color = "black", size = 0.8) +  # Contornos en azul
+  geom_hline(yintercept = thresholds, linetype = "dashed", color = "grey40", size = 0.7) +  # Líneas horizontales
+  geom_vline(xintercept = thresholds, linetype = "dashed", color = "grey40", size = 0.7) +  # Líneas verticales
+  scale_y_continuous(limits = c(-3, 3), name = "Y-Axis") +
+  scale_x_continuous(limits = c(-3, 3), name = "X-Axis") +
+  labs(
+    title = "Contour Plot with Thresholds",
+    subtitle = "Thresholds: τ1=-1.5, τ2=-0.5, τ3=0.5, τ4=1.5",
+    caption = "Simulated Bivariate Normal Data"
+  ) +
+  theme_minimal(base_size = 14) +  # Tema limpio y profesional
+  theme(
+    panel.grid = element_blank(),  # Eliminar cuadrícula de fondo
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12)
+  )
+```
+
+```{r}
+ggsave("mvn_thre.png",
+       dpi = 300,
+       height = 4,
+       width = 4)
+```
+
+
+
+```{r}
+# Crear el gráfico 3D con plotly
+plot_ly(
+  x = dens$x, 
+  y = dens$y, 
+  z = dens$z
+) %>% 
+  add_surface() %>% 
+  layout(
+    title = "3D Plot of Multivariate Normal Density",
+    scene = list(
+      xaxis = list(title = "X"),
+      yaxis = list(title = "Y"),
+      zaxis = list(title = "Density")
+    )
+  )
+```
+
+
+# No-Normalidad bivariada
+
+```{r}
+library(mnonr)
+```
+
+
+```{r}
+sigma <- matrix(c(1, 0.7, 0.7, 1), 
+                nrow = 2)
+
+# Generar datos multivariados no normales con valores teóricos
+non_mvn_sim <- mnonr::mnonr(
+  n = 10000,
+  p = 2,
+  ms = 7,
+  mk = 20,
+  Sigma = sigma
+) |>
+  as.data.frame()
+
+
+# non_mvn_sim <- semTools::mvrnonnorm(
+#   n = 10000,
+#   c(0, 0),
+#   sigma,
+#   skewness = 7,
+#   kurtosis = 20
+# ) |>
+#   as.data.frame()
+
+
+# Paso 2: Reflejar los datos
+non_mvn_sim_reflected <- -non_mvn_sim
+
+# Paso 3: Ajustar la media (opcional)
+non_mvn_sim_reflected <- sweep(non_mvn_sim_reflected, 2, colMeans(non_mvn_sim_reflected), FUN = "-")
+
+# Generar una cuadrícula teórica para suavizar los valores
+non_mvn_dens <- MASS::kde2d(non_mvn_sim_reflected$V1, non_mvn_sim_reflected$V2, 
+                    n = 100, lims = c(-3, 3, -3, 3))
+
+# Crear gráfico de contornos
+ggplot(expand.grid(x = non_mvn_dens$x, y = non_mvn_dens$y), 
+       aes(x = x, y = y, z = as.vector(non_mvn_dens$z))) +
+  geom_contour() +
+  labs(
+    title = "Contour Plot for Non-Normal Multivariate Data",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal()
+
+plot_ly(
+  x = non_mvn_dens$x, 
+  y = non_mvn_dens$y, 
+  z = non_mvn_dens$z
+) %>% 
+  add_surface() %>% 
+  layout(
+    title = "3D Plot for Non-Normal Multivariate Normal Density",
+    scene = list(
+      xaxis = list(title = "X"),
+      yaxis = list(title = "Y"),
+      zaxis = list(title = "Density")
+    )
+  )
+```
+
+```{r}
+library(ggplot2)
+
+# Umbrales
+thresholds <- c(-1.5, -0.5, 0.5, 1.5)
+
+# Crear gráfico de contornos
+ggplot(expand.grid(x = non_mvn_dens$x, y = non_mvn_dens$y), 
+       aes(x = x, y = y, z = as.vector(non_mvn_dens$z))) +
+  geom_contour(color = "black", size = 0.8) +  # Contornos en negro
+  geom_hline(yintercept = thresholds, linetype = "dashed", color = "grey40", size = 0.7) +  # Líneas horizontales
+  geom_vline(xintercept = thresholds, linetype = "dashed", color = "grey40", size = 0.7) +  # Líneas verticales
+  scale_y_continuous(limits = c(-3, 3), name = "Y-Axis") +
+  scale_x_continuous(limits = c(-3, 3), name = "X-Axis") +
+  labs(
+    title = "Contour Plot for Non-Normal Multivariate Data",
+    subtitle = "Thresholds: τ1=-1.5, τ2=-0.5, τ3=0.5, τ4=1.5",
+    caption = "Simulated Non-Normal Multivariate Data"
+  ) +
+  theme_minimal(base_size = 14) +  # Tema limpio y profesional
+  theme(
+    panel.grid = element_blank(),  # Eliminar cuadrícula de fondo
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12)
+  )
+
+```
+
+```{r}
+ggsave("mvn_thre2.png",
+       dpi = 300,
+       height = 4,
+       width = 4)
+```
+
+
+# Ítems y Factores
+
+```{r}
+F1 <- non_mvn_sim$V1
+peso <- 0.7
+n <- 100
+err <- sqrt(1 - peso^2)
+
+i1 <- peso * F1 + err * rnorm(n)
+i2 <- peso * F1 + err * rnorm(n)
+i3 <- peso * F1 + err * rnorm(n)
+i4 <- peso * F1 + err * rnorm(n)
+
+
+df <- data.frame(i1, i2, i3, i4)
+
+
+```
+
+```{r}
+library(lavaan)
+```
+
+
+```{r}
+model <- "F1 =~ i1 + i2 + i3 + i4"
+
+fit <- cfa(model = model, data = df)
+summary(fit, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+```{r}
+sigma <- matrix(c(1, 0.7, 0.7, 1), 
+                nrow = 2)
+
+# Generar datos multivariados no normales con valores teóricos
+non_mvn_sim <- mnonr::mnonr(
+  n = 50, 
+  p = 2, 
+  ms = 6,  
+  mk = 18,   
+  Sigma = sigma
+) |> 
+  as.data.frame()
+
+
+
+non_mvn_sim <- semTools::mvrnonnorm(
+  n = 100,
+  c(0, 0),
+  sigma, 
+  skewness = 6,
+  kurtosis = 18
+) |> 
+  as.data.frame()
+
+
+```
+
+
+```{r}
+df_cat <- df |> 
+  mutate(
+    across(
+      everything(),
+      ~ case_when(
+        .x <= -0.5 ~ 1,
+        .default = 2
+      )
+    )
+  )
+
+hist(df$i1)
+
+psych::polychoric(df_cat)
+```
+
+
+
+
