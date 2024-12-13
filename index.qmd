@@ -204,3 +204,71 @@ sim_items_data <- sim_items_data |>
 saveRDS(sim_items_data, file = "sim_items_data.RData")
 ```
 
+
+# Análisis
+
+```{r}
+sim_items_data <- readRDS("sim_items_data.RData")
+```
+
+
+## EFA
+
+```{r}
+get_correlation_matrix <- function(data, n_cat) {
+  # Seleccionar columnas categorizadas
+  cat_columns <- data[, grepl("_cat$", names(data))]
+  
+  if (n_cat == 5) {
+    # Correlaciones policóricas
+    result <- psych::polychoric(cat_columns)
+  } else if (n_cat == 2) {
+    # Correlaciones tetracóricas
+    result <- psych::tetrachoric(cat_columns)
+  } else {
+    stop("Invalid number of categories. Must be 2 or 5.")
+  }
+  
+  return(result)  # Devolver solo la matriz de correlaciones
+}
+
+
+run_efa <- function(data, corr_matrix, n_cat, n_size) {
+  # Seleccionar columnas categorizadas
+  cat_columns <- data[, grepl("_cat$", names(data))]
+  
+  # EFA 1: Con correlaciones Pearson (por defecto en psych::fa)
+  efa_pearson <- psych::fa(cat_columns, nfactors = 1, n.obs = n_size, fm = "minres")
+  
+  # EFA 2: Con matriz de correlaciones policóricas o tetracóricas
+  efa_categorical <- psych::fa(corr_matrix$rho, nfactors = 1, n.obs = n_size, fm = "minres")
+  
+  # Devolver resultados como una lista
+  return(list(efa_pearson = efa_pearson, efa_categorical = efa_categorical))
+}
+
+```
+
+```{r}
+cluster_copy(cluster, "get_correlation_matrix")
+cluster_copy(cluster, "run_efa")
+```
+
+
+```{r}
+sim_items_analysis <- sim_items_data |> 
+  rowwise() |> 
+  partition(cluster) |> 
+  mutate(
+    corr_matrix = list(get_correlation_matrix(sim_data, n_cat)),
+    efa_result = list(
+      run_efa(sim_data, corr_matrix, n_cat, n_size)
+    )
+  ) |> 
+  collect()
+```
+
+
+```{r}
+saveRDS(sim_items_analysis, file = "sim_items_analysis.RData")
+```
