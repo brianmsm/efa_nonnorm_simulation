@@ -127,3 +127,80 @@ sim_conditions <- expand_grid(sim_conditions, n_replic = 1:500) |>
 ```
 
 
+# Simulación
+
+```{r}
+generate_items <- function(n_size, distribution, n_items, pre_loadings, thresholds, n_cat) {
+  # Generar el factor latente (F1)
+  if (distribution == "MVN") {
+    F1 <- rnorm(n_size)
+  } else if (distribution == "Non-MVN") {
+    F1 <- detectnorm::rnonnorm(n_size, skew = 7, kurt = 20)
+    F1 <- F1$dat
+  } else {
+    stop("Invalid distribution type")
+  }
+  
+  # Inicializar listas para almacenar los ítems generados
+  items <- vector("list", n_items)
+  items_cat <- vector("list", n_items)
+  
+  # Generar cada ítem
+  for (i in seq_len(n_items)) {
+    # Generar ítem continuo
+    loading <- pre_loadings[i]
+    error_sd <- sqrt(1 - loading^2)
+    items[[i]] <- loading * F1 + error_sd * rnorm(n_size)
+    
+    # Categorizar el ítem usando los umbrales
+    thresholds_i <- thresholds[[i]]
+    
+    # Validar que los thresholds coincidan con n_cat
+    if (length(thresholds_i) + 1 != n_cat) {
+      stop(glue::glue("Mismatch: n_cat = {n_cat}, thresholds = {length(thresholds_i)}"))
+    }
+    
+    items_cat[[i]] <- cut(
+      items[[i]], 
+      breaks = c(-Inf, thresholds_i, Inf), 
+      labels = seq_len(n_cat),
+      right = FALSE
+    )
+  }
+  
+  # Combinar en un data frame
+  items_df <- as.data.frame(do.call(cbind, items))
+  colnames(items_df) <- paste0("x", seq_len(n_items))
+  
+  items_cat_df <- as.data.frame(do.call(cbind, items_cat))
+  colnames(items_cat_df) <- paste0("x", seq_len(n_items), "_cat")
+  
+  # Retornar ambos conjuntos de datos
+  return(cbind(items_df, items_cat_df))
+}
+```
+
+```{r}
+library(multidplyr)
+cluster <- new_cluster(parallel::detectCores())
+cluster_copy(cluster, "generate_items")
+```
+
+```{r}
+sim_items_data <-  sim_conditions |> 
+  rowwise() |> 
+  partition(cluster) %>%
+  mutate(
+    sim_data = list(
+      generate_items(n_size, distribution, n_items, pre_loadings, thresholds, n_cat)
+    )
+  )
+
+sim_items_data <- sim_items_data |> 
+  collect()
+```
+
+```{r}
+saveRDS(sim_items_data, file = "sim_items_data.RData")
+```
+
