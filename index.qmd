@@ -272,3 +272,238 @@ sim_items_analysis <- sim_items_data |>
 ```{r}
 saveRDS(sim_items_analysis, file = "sim_items_analysis.RData")
 ```
+
+# Métricas
+
+```{r}
+sim_items_analysis <- readRDS("sim_items_analysis.RData")
+```
+
+## Agregar informacion de la correlacion teórica:
+
+```{r}
+adjust_theoretical_corr <- function(pre_loadings) {
+  # Calcular la matriz de correlaciones como el producto externo de las cargas factoriales
+  theoretical_matrix <- outer(pre_loadings, pre_loadings)
+  
+  # Asegurar que la diagonal sea exactamente 1
+  diag(theoretical_matrix) <- 1
+  
+  return(theoretical_matrix)
+}
+
+process_estimated_thresholds <- function(estimated_tau, n_cat) {
+  if (n_cat == 2) {
+    # estimated_tau es un vector nombrado
+    # Cada valor corresponde a un ítem
+    estimated_thresholds_list <- lapply(names(estimated_tau), function(name) {
+      estimated_tau[[name]]
+    })
+  } else if (n_cat == 5) {
+    # estimated_tau es una matriz o data.frame
+    # Cada fila corresponde a un ítem, y las columnas a los umbrales
+    estimated_thresholds_list <- split(estimated_tau, rownames(estimated_tau))
+  } else {
+    stop("Número de categorías no soportado.")
+  }
+  return(estimated_thresholds_list)
+}
+
+# Alinear signos
+align_sign <- function(estimated, theoretical) {
+  cor_coef <- cor(estimated, theoretical)
+  if (cor_coef < 0) {
+    estimated <- -estimated
+  }
+  return(estimated)
+}
+```
+
+```{r}
+sim_items_analysis <- sim_items_analysis |> 
+  rowwise() |> 
+  mutate(
+    corr_matrix_theo = list(adjust_theoretical_corr(pre_loadings)),
+    thresholds_estimated = list(
+        process_estimated_thresholds(
+          corr_matrix$tau,
+          n_cat
+      )
+    ),
+    estimated_loadings_pearson = list(
+      align_sign(
+        efa_result$efa_pearson$loadings[,1],
+        pre_loadings
+      )
+    ),
+    estimated_loadings_cat = list(
+      align_sign(
+        efa_result$efa_categorical$loadings[,1],
+        pre_loadings
+      )
+    )
+  ) 
+```
+
+## Bias y MSE
+
+```{r}
+calculate_bias <- function(estimated, theoretical) {
+  (estimated - theoretical) / theoretical
+}
+
+calculate_mse <- function(estimated, theoretical) {
+  ((estimated - theoretical) / theoretical)^2
+}
+
+
+calculate_bias_thresholds <- function(estimated_thresholds, theoretical_thresholds) {
+  # Inicializar una lista para almacenar los sesgos por réplica
+  bias_list <- list()
+  
+  for (j in seq_along(theoretical_thresholds)) {  # Por cada ítem
+    est_thresh <- estimated_thresholds[[j]]
+    theo_thresh <- theoretical_thresholds[[j]]
+    
+    # Asegurarse de que los umbrales están alineados
+    if (length(est_thresh) != length(theo_thresh)) {
+      stop(paste("Desajuste en la cantidad de umbrales en el ítem", j))
+    }
+    
+    # Calcular el sesgo relativo para cada umbral del ítem j
+    bias_item <- (est_thresh - theo_thresh) / theo_thresh
+    bias_list[[j]] <- bias_item
+  }
+  
+  # Convertir la lista en un vector
+  bias_vector <- mean(unlist(bias_list))
+  return(bias_vector)
+}
+
+calculate_mse_thresholds <- function(estimated_thresholds, theoretical_thresholds) {
+  # Similar a la función anterior, pero calcula el MSE
+  mse_list <- list()
+  
+  for (j in seq_along(theoretical_thresholds)) {
+    est_thresh <- estimated_thresholds[[j]]
+    theo_thresh <- theoretical_thresholds[[j]]
+    
+    if (length(est_thresh) != length(theo_thresh)) {
+      stop(paste("Desajuste en la cantidad de umbrales en el ítem", j))
+    }
+    
+    mse_item <- ((est_thresh - theo_thresh) / theo_thresh)^2
+    mse_list[[j]] <- mse_item
+  }
+  
+  mse_vector <- mean(unlist(mse_list))
+  return(mse_vector)
+}
+
+tucker_congruence <- function(estimated, theoretical) {
+  sum(estimated * theoretical) / sqrt(sum(estimated^2) * sum(theoretical^2))
+}
+```
+
+```{r}
+cluster_copy(cluster, "calculate_bias")
+cluster_copy(cluster, "calculate_mse")
+cluster_copy(cluster, "calculate_bias_thresholds")
+cluster_copy(cluster, "calculate_mse_thresholds")
+cluster_copy(cluster, "tucker_congruence")
+
+cluster_copy(cluster, "n")
+```
+
+
+```{r}
+sim_items_analysis2 <- sim_items_analysis |> 
+  rowwise() |> 
+  partition(cluster) |> 
+  # filter(
+  #   n_size == 200,
+  #   distribution == "MVN",
+  #   n_items == 5,
+  #   type_loadings == "high",
+  #   n_cat %in% c(2, 5),
+  #   type_threshold == "asym"
+  # ) |>
+  mutate(
+    bias_loadings_pearson = mean(calculate_bias(estimated_loadings_pearson,
+                                                pre_loadings )),
+    bias_loadings_cat = mean(calculate_bias(estimated_loadings_cat,
+                                            pre_loadings )),
+    mse_loadings_pearson = mean(calculate_mse(estimated_loadings_pearson,
+                                                pre_loadings )),
+    mse_loadings_cat = mean(calculate_mse(estimated_loadings_cat,
+                                            pre_loadings )),
+    bias_threshold = calculate_bias_thresholds(thresholds_estimated,
+                                               thresholds),
+    mse_threshold = calculate_mse_thresholds(thresholds_estimated,
+                                             thresholds),
+    tucker_cong_pearson = tucker_congruence(estimated_loadings_pearson,
+                                            pre_loadings),
+    tucker_cong_cat = tucker_congruence(estimated_loadings_cat,
+                                        pre_loadings)
+  ) |> 
+  collect()
+
+sim_items_analysis3 <- sim_items_analysis2 |> 
+  group_by(
+    across(c(n_size:type_threshold, pre_loadings:thresholds))
+  ) |> 
+  summarise(
+    # Sesgo de las cargas factoriales estimadas con Pearson
+    bias_loadings_pearson = mean(bias_loadings_pearson, na.rm = TRUE),
+    bias_loadings_pearson_lowconf = quantile(bias_loadings_pearson, 0.025, na.rm = TRUE),
+    bias_loadings_pearson_highconf = quantile(bias_loadings_pearson, 0.975, na.rm = TRUE),
+    
+    # Sesgo de las cargas factoriales estimadas con métodos categóricos
+    bias_loadings_cat = mean(bias_loadings_cat, na.rm = TRUE),
+    bias_loadings_cat_lowconf = quantile(bias_loadings_cat, 0.025, na.rm = TRUE),
+    bias_loadings_cat_highconf = quantile(bias_loadings_cat, 0.975, na.rm = TRUE),
+    
+    # MSE de las cargas factoriales estimadas con Pearson
+    mse_loadings_pearson = mean(mse_loadings_pearson, na.rm = TRUE),
+    mse_loadings_pearson_lowconf = quantile(mse_loadings_pearson, 0.025, na.rm = TRUE),
+    mse_loadings_pearson_highconf = quantile(mse_loadings_pearson, 0.975, na.rm = TRUE),
+    
+    # MSE de las cargas factoriales estimadas con métodos categóricos
+    mse_loadings_cat = mean(mse_loadings_cat, na.rm = TRUE),
+    mse_loadings_cat_lowconf = quantile(mse_loadings_cat, 0.025, na.rm = TRUE),
+    mse_loadings_cat_highconf = quantile(mse_loadings_cat, 0.975, na.rm = TRUE),
+    
+    # Sesgo de los umbrales
+    bias_threshold = mean(bias_threshold, na.rm = TRUE),
+    bias_threshold_lowconf = quantile(bias_threshold, 0.025, na.rm = TRUE),
+    bias_threshold_highconf = quantile(bias_threshold, 0.975, na.rm = TRUE),
+    
+    # MSE de los umbrales
+    mse_threshold = mean(mse_threshold, na.rm = TRUE),
+    mse_threshold_lowconf = quantile(mse_threshold, 0.025, na.rm = TRUE),
+    mse_threshold_highconf = quantile(mse_threshold, 0.975, na.rm = TRUE),
+    
+    # Coeficiente de congruencia de Tucker con Pearson
+    tucker_cong_pearson = mean(tucker_cong_pearson, na.rm = TRUE),
+    tucker_cong_pearson_lowconf = quantile(tucker_cong_pearson, 0.025, na.rm = TRUE),
+    tucker_cong_pearson_highconf = quantile(tucker_cong_pearson, 0.975, na.rm = TRUE),
+    
+    # Coeficiente de congruencia de Tucker con métodos categóricos
+    tucker_cong_cat = mean(tucker_cong_cat, na.rm = TRUE),
+    tucker_cong_cat_lowconf = quantile(tucker_cong_cat, 0.025, na.rm = TRUE),
+    tucker_cong_cat_highconf = quantile(tucker_cong_cat, 0.975, na.rm = TRUE),
+    
+    # Cantidad de réplicas en cada condición
+    n_replicas = n()
+  ) |> 
+  ungroup()
+```
+
+
+```{r}
+saveRDS(sim_items_analysis2, "sim_items_analysis2.RData")
+```
+
+```{r}
+saveRDS(sim_items_analysis3, "sim_items_analysis3.RData")
+```
