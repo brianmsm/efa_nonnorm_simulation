@@ -507,3 +507,143 @@ saveRDS(sim_items_analysis2, "sim_items_analysis2.RData")
 ```{r}
 saveRDS(sim_items_analysis3, "sim_items_analysis3.RData")
 ```
+
+
+# Gráficos y Análisis
+
+```{r}
+sim_items_analysis2 <- readRDS("sim_items_analysis2.RData")
+```
+
+
+## Boxplot
+
+```{r}
+library(ggrain)
+```
+
+
+```{r}
+sim_items_analysis2 <- sim_items_analysis2 |> 
+  mutate(
+    across(
+      c(n_size, n_items, n_cat),
+      as.factor
+    )
+  )
+```
+
+```{r}
+ggplot(sim_items_analysis2, aes(x = n_cat,
+                                y = bias_loadings_cat,
+                                fill = type_loadings)) +
+  geom_boxplot(outlier.shape = 21, outlier.size = 1, 
+               outlier.fill = "white",
+               fatten  = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(limits = c(-1, 0)) + 
+    geom_hline(yintercept = -0.5, linetype = "dashed", 
+               color = "red", size = 0.5) +  # Línea eje X
+  facet_grid(vars(n_size, n_items),
+             vars(distribution, type_threshold)) +
+  labs(title = "Sesgo de Cargas Factoriales (Tetra/Policórica)",
+       x = "Número de Categorías", y = "Bias",
+       fill = "Loadings") +
+  theme_minimal(base_size = 14) + 
+  theme(
+    axis.line = element_line(color = "black"),  
+    axis.ticks = element_line(color = "black"),  
+    panel.grid = element_blank(),
+    panel.grid.major.x = element_blank(),  # Eliminar cuadrículas verticales
+    strip.background = element_rect(color = "grey60",
+                                    fill = NA),  # Fondo para las facetas
+    strip.text = element_text(size = 12, face = "bold"),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5)
+  )
+```
+
+
+```{r}
+ggsave("plot1_new.png",
+       dpi = 300,
+       height = 7,
+       width = 6.5)
+```
+
+
+```{r}
+ggplot(sim_items_analysis2, aes(x = n_cat,
+                                y = bias_loadings_pearson,
+                                fill = type_loadings)) +
+  geom_boxplot(outlier.shape = 21, outlier.size = 1, 
+               outlier.fill = "white",
+               fatten  = 0.5) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(limits = c(-1, 0)) + 
+    geom_hline(yintercept = -0.5, linetype = "dashed", 
+               color = "red", size = 0.5) +  # Línea eje X
+  facet_grid(vars(n_size, n_items),
+             vars(distribution, type_threshold)) +
+  labs(title = "Sesgo de Cargas Factoriales (Pearson)",
+       x = "Número de Categorías", y = "Bias",
+       fill = "Loadings") +
+  theme_minimal(base_size = 14) + 
+  theme(
+    axis.line = element_line(color = "black"),  
+    axis.ticks = element_line(color = "black"),  
+    panel.grid = element_blank(),
+    panel.grid.major.x = element_blank(),  # Eliminar cuadrículas verticales
+    strip.background = element_rect(color = "grey60",
+                                    fill = NA),  # Fondo para las facetas
+    strip.text = element_text(size = 12, face = "bold"),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5)
+  )
+```
+
+
+
+```{r}
+ggsave("plot2_new.png",
+       dpi = 300,
+       height = 7,
+       width = 6.5)
+```
+
+
+
+```{r}
+ggplot(sim_items_analysis2, aes(x = n_cat, y = bias_threshold, fill = type_threshold )) +
+  geom_boxplot() +
+  geom_boxplot(outlier.shape = 21, outlier.size = 1, 
+               outlier.fill = "white",
+               fatten  = 0.5) +
+  scale_fill_brewer(palette = "Set1") +
+  
+  facet_grid(vars(n_size, n_items),
+             vars(distribution, type_threshold)) +
+  labs(title = "Sesgo de Umbrales",
+       x = "Número de Categorías", y = "Bias",
+       fill = "Threshold type") +
+  theme_minimal(base_size = 14) + 
+  theme(
+    axis.line = element_line(color = "black"),  
+    axis.ticks = element_line(color = "black"),  
+    panel.grid = element_blank(),
+    panel.grid.major.x = element_blank(),  # Eliminar cuadrículas verticales
+    strip.background = element_rect(color = "grey60",
+                                    fill = NA),  # Fondo para las facetas
+    strip.text = element_text(size = 12, face = "bold"),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5)
+  )
+```
+
+
+
+
+```{r}
+ggsave("plot3_new.png",
+       dpi = 300,
+       height = 6,
+       width = 8)
+```
+
