@@ -1,16 +1,30 @@
 project:
   type: manuscript
+  render:
+    - "*.qmd"
+    - "!LICENSE.md"
+    - "!poster.qmd"
+    - "!test.qmd"
 
 manuscript:
   article: index.qmd
 
-format:
+format: 
   html:
-    comments:
-      hypothesis: true
-  docx: default
-  jats: default
-
+    theme:
+      light: flatly
+      dark: darkly
+    toc: true
+    toc-depth: 5
+    number-sections: true
+    anchor-sections: true
+    code-line-numbers: true
+    code-overflow: scroll
+    code-copy: hover
+    code-link: true
+    code-fold: true
+    code-tools: true
+    fig-dpi: 300
   # (other formats)
   # pdf: default
 
