@@ -2,37 +2,128 @@
 title: "Simulación de ítems con distribuciones no-normales y su efecto en el análisis factorial exploratorio mediante correlaciones teracóricas/policóricas"
 authors:
   - name: Brian Norman Peña-Calero
-    affiliation: The University
-    roles: analyst
+    orcid: 0000-0002-1073-9306
+    affiliation: Universidad Complutense de Madrid (UCM)
+    email: 
+    roles: 
+      - Researcher
+      - Analyst
     corresponding: true
-date: now
+date: last-modified
 date-format: "DD MMMM, YYYY"
-format: 
-  html:
-    theme:
-      light: flatly
-      dark: darkly
-    toc: true
-    toc-depth: 5
-    number-sections: true
-    anchor-sections: true
-    code-line-numbers: true
-    code-overflow: scroll
-    code-copy: hover
-    code-link: true
-    code-fold: true
-    code-tools: true
-    fig-dpi: 300
 lang: es
 lightbox: true
-embed-resources: true
+bibliography: references.bib
 editor_options: 
   chunk_output_type: console
 ---
 
-## Section
-This is a simple placeholder for the manuscript's main document.
+# Condiciones de simulacion
 
 ```{r}
-1 + 1
+library(tidyverse)
 ```
+
+- Número de ítems: 
+  + 1 Factor: 
+    * 5 ítems: cargas superior a 0.60 y cargas entre 0.30 a 0.70
+    * 8 ítems: cargas superior a 0.60 y cargas entre 0.30 a 0.70
+  + 2 Factores: 5 ítems por factor
+  
+  
+Para la definición de los umbrales se realizó una adaptación de lo sugerido en @yang2015:
+
+- Umbrales simétricos:
+  + 2 categorías: $\tau_1 = 0$
+  + 5 categorías: $\tau_1 = -1.5$, $\tau_2 = -0.5$, $\tau_3 = 0.5$, $\tau_4 = 1.5$
+- Umbrales asimétricos:
+  + 2 categorías: $tau_1 = -1$
+  + 5 categorías: $\tau_1 = 0$, $\tau_2 = -0.5$, $\tau_3 = -1.25$, $\tau_4 = -1.75$
+
+
+```{r}
+r_unif_seed <- function(n, min, max, seed = 123) {
+  set.seed(seed)
+  round(runif(n, min, max))
+}
+
+
+loading_sim <- function(n_items, type_loadings, seed = 123) {
+  
+  if (type_loadings == "high") {
+    min_loading <-  0.6
+    max_loading <- 0.9
+  } else if (type_loadings == "mid") {
+    min_loading <-  0.3
+    max_loading <- 0.7
+  }
+  
+  set.seed(seed)
+  round(runif(n_items, min_loading, max_loading), 3)
+}
+
+threshold_sim <- function(n_items, type_threshold, n_cat, seed = 123) {
+  set.seed(seed)
+  
+  # Definir los umbrales base según el tipo y número de categorías
+  base_thresholds <- switch(
+    type_threshold,
+    "symetric" = if (n_cat == 2) c(0) else c(-1.5, -0.5, 0.5, 1.5),
+    "asym" = if (n_cat == 2) c(-1) else c(0, -0.5, -1.25, -1.75),
+    stop("Invalid type_threshold")
+  )
+  
+  # Agregar ruido a los umbrales base para cada ítem
+  thresholds_list <- replicate(n_items, {
+    sapply(base_thresholds, function(threshold) round(threshold + runif(1, -0.05, 0.05), 3))
+  }, simplify = FALSE)
+  
+  return(thresholds_list)
+}
+```
+
+
+```{r}
+sim_conditions <- expand_grid(
+  n_size = c(200, 500, 1000),
+  n_factor = 1,
+  distribution = c("MVN", "Non-MVN"),
+  n_items = c(5, 8),
+  type_loadings = c("high", "mid"),
+  n_cat = c(2, 5),
+  type_threshold = c("symetric", "asym")
+)
+
+sim_conditions <- sim_conditions |> 
+  mutate(
+    # Crear un identificador único para las combinaciones relevantes
+    combo_id = paste(n_items, type_loadings, sep = "_"),
+    # Asignar una semilla única a cada combinación
+    unique_seed = as.integer(factor(combo_id)) + 100  # Generar semillas únicas replicables
+  ) |> 
+  group_by(combo_id) |> 
+  mutate(
+    # Usar la semilla única para generar valores aleatorios
+    seed_loadings = r_unif_seed(1, 1, 100, unique_seed)
+  ) |> 
+  ungroup() |> 
+  select(-combo_id, -unique_seed)  # Eliminar columnas temporales
+
+sim_conditions <- sim_conditions |> 
+  rowwise() |> 
+  mutate(
+    pre_loadings = list(loading_sim(n_items, type_loadings, seed_loadings)),
+    thresholds = list(threshold_sim(
+      n_items = n_items, 
+      type_threshold = type_threshold, 
+      n_cat = n_cat
+    ))
+  ) |> 
+  select(-seed_loadings) |> 
+  ungroup()
+
+sim_conditions <- expand_grid(sim_conditions, n_replic = 1:500) |> 
+  relocate(n_replic, .after = type_threshold) 
+```
+
+
